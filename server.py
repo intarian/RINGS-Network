@@ -4,8 +4,19 @@
 import socket
 import numpy as np
 
+import json
+from json import JSONEncoder
+
+
 HOST = "127.0.0.1"  # Standard loopback interface address (localhost)
 PORT = 65432  # Port to listen on (non-privileged ports are > 1023)
+
+class NumpyArrayEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return JSONEncoder.default(self, obj)
+
 
 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.bind((HOST, PORT))
@@ -18,9 +29,16 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             if not data:
                 break
             else:
-                print('Original Data received: ',np.frombuffer(data, dtype='float64'))
-                data = np.frombuffer(data, dtype='float64')
-                data = data*2
-                data = data.tobytes()
-                print('Data to be send back: ',np.frombuffer(data, dtype='float64'))
-                conn.sendall(data)
+                ## Receive data from client
+                data_r = data.decode("utf-8")
+                data_json = json.loads(data_r)
+                decodedArrays = np.asarray(data_json["array"])
+                ## Start Computation or run algorithm on numpy matrix
+                print('Received Matrix at Server: ')
+                print(decodedArrays)
+                data = decodedArrays@decodedArrays
+                ## Convert back to json
+                numpyData = {"array": data}
+                data_s_json = json.dumps(numpyData, cls=NumpyArrayEncoder)
+                data_s_bytes = bytes(data_s_json,encoding="utf-8")
+                conn.sendall(data_s_bytes)
